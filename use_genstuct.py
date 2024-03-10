@@ -1,6 +1,7 @@
 import ollama
 import pandas as pd
 from tqdm import tqdm  
+import os
 def break_into_sections(input_text):
     # Define markers for each section
     markers = {
@@ -48,10 +49,20 @@ def break_into_sections(input_text):
     
     return sections
 
-def process_dataset(csv_file_path, output_csv_file_path):
+def process_dataset(csv_file_path, output_csv_file_path, progress_tracker_path):
+    # Load the dataset
     df = pd.read_csv(csv_file_path)
-    output_data = []    
+
+    # Check if there's an existing progress tracker file and read the last processed row
+    if os.path.exists(progress_tracker_path):
+        with open(progress_tracker_path, 'r') as f:
+            last_processed_row = int(f.read().strip())
+    else:
+        last_processed_row = -1  # Indicates that no rows have been processed
+
     for i, row in tqdm(enumerate(df.itertuples()), total=len(df), desc="Processing"):
+        if i <= last_processed_row:
+            continue  # Skip rows that have already been processed
 
         title = getattr(row, "title")
         content = getattr(row, "content")
@@ -61,23 +72,27 @@ def process_dataset(csv_file_path, output_csv_file_path):
 The following is an interaction between a user and an AI assistant that is related to the above text.
 [[[User]]] """
 
-        response =  ollama.generate(model='eas/nous-genstruct:7b-q8_0', prompt=message)
-        
+        response = ollama.generate(model='eas/nous-genstruct:7b-q8_0', prompt=message)
+
         gen_text = response['response']
         combined_message = message + "\n " + gen_text
         print(combined_message)
         sectioned = break_into_sections(combined_message)
-        
-        # Append the output item to the output_data list, maintaining the CSV structure
-        output_data.append([title, content, sectioned['user'], sectioned['assistant']])
 
-    # Convert the list of lists into a DataFrame
-    output_df = pd.DataFrame(output_data, columns=["title", "content", "user", "assistant"])
-    
-    # Write the DataFrame to a CSV file
-    output_df.to_csv(output_csv_file_path, index=False)
+        # Append the output item directly to the output CSV file
+        with open(output_csv_file_path, 'a', newline='',encoding='utf-8') as f:
+            # Create a DataFrame for the current row data
+            df_row = pd.DataFrame([[title, content, sectioned['user'], sectioned['assistant']]], 
+                                columns=["title", "content", "user", "assistant"])
+            # Append the DataFrame to the CSV file
+            df_row.to_csv(f, header=False, index=False)
+        
+        # Update the last processed row
+        with open(progress_tracker_path, 'w') as f:
+            f.write(str(i))
 
 # Example usage of the function with sample file paths
-csv_file_path = "sample_data.csv"  # Replace this with the actual file path
-output_csv_file_path = "output_data.csv"  # Specify the output CSV file path
-process_dataset(csv_file_path, output_csv_file_path)
+csv_file_path = "input.csv"  # Replace this with the actual file path
+output_csv_file_path = "outpoot.csv"  # Specify the output CSV file path
+progress_tracker_path = "progress_tracker.txt"  # Path to save the progress
+process_dataset(csv_file_path, output_csv_file_path, progress_tracker_path)
