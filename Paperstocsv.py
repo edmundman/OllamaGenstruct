@@ -47,7 +47,7 @@ def process_pdf_folder(folder_path, output_csv):
     
     with open(output_csv, mode='w', newline='', encoding='utf-8') as file:
         writer = csv.writer(file)
-        writer.writerow(['Title', 'Content'])
+        writer.writerow(['title', 'content'])
 
         for filename in tqdm(pdf_files, desc="Processing PDFs"):
             pdf_path = os.path.join(folder_path, filename)
